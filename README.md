@@ -32,7 +32,7 @@ USAGE:
 
 OPTIONS:
   -c         concurrency level (default: 20)
-  -delay     delay between requests (ms) (default: 100)
+  -delay     delay between requests (default: 100ms)
   -iL        urls with 403 to bypass (use `iL -` to read from stdin)
   -nC        no color mode
 ```

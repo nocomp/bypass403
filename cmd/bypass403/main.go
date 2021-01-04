@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -15,7 +17,6 @@ import (
 
 	"github.com/drsigned/gos"
 	"github.com/logrusorgru/aurora/v3"
-	"github.com/valyala/fasthttp"
 )
 
 type options struct {
@@ -110,12 +111,13 @@ func main() {
 	for i := 0; i < o.concurrency; i++ {
 		wg.Add(1)
 
-		time.Sleep(time.Duration(o.delay) * time.Millisecond)
-
 		go func() {
 			defer wg.Done()
 
-			client := &fasthttp.Client{}
+			client, err := getClient()
+			if err != nil {
+				log.Fatalln(err)
+			}
 
 			for URL := range URLs {
 				if URL == "" {
@@ -179,48 +181,66 @@ func main() {
 				}
 
 				for _, bypass := range bypasses {
-					req := fasthttp.AcquireRequest()
-					res := fasthttp.AcquireResponse()
+					time.Sleep(time.Duration(o.delay) * time.Millisecond)
 
-					defer func() {
-						fasthttp.ReleaseRequest(req)
-						fasthttp.ReleaseResponse(res)
-					}()
-
-					req.SetRequestURI(bypass)
-
-					if err := client.Do(req, res); err != nil {
+					res, err := Request(bypass, map[string]string{}, client)
+					if err != nil {
 						continue
 					}
 
-					// fmt.Println("[", res.StatusCode(), "]", bypass)
-					fmt.Println("[", coloredStatus(res.StatusCode(), au), "]", bypass)
+					fmt.Println("[", coloredStatus(res.StatusCode, au), "]", bypass)
 				}
 
 				for j := 0; j < len(headers); j++ {
-					req := fasthttp.AcquireRequest()
-					res := fasthttp.AcquireResponse()
+					time.Sleep(time.Duration(o.delay) * time.Millisecond)
 
-					defer func() {
-						fasthttp.ReleaseRequest(req)
-						fasthttp.ReleaseResponse(res)
-					}()
-
-					req.SetRequestURI(parsedURL.String())
-					req.Header.Set(headers[j][0], headers[j][1])
-
-					if err := client.Do(req, res); err != nil {
+					res, err := Request(parsedURL.String(), map[string]string{headers[j][0]: headers[j][1]}, client)
+					if err != nil {
 						continue
 					}
 
-					// fmt.Println("[", res.StatusCode(), "]", parsedURL.String(), "-H", headers[j][0]+":", headers[j][1])
-					fmt.Println("[", coloredStatus(res.StatusCode(), au), "]", parsedURL.String(), "-H", headers[j][0]+":", headers[j][1])
+					fmt.Println("[", coloredStatus(res.StatusCode, au), "]", parsedURL.String(), "-H", headers[j][0]+":", headers[j][1])
 				}
 			}
 		}()
 	}
 
 	wg.Wait()
+}
+
+func getClient() (*http.Client, error) {
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: time.Second,
+			DualStack: true,
+		}).DialContext,
+	}
+
+	return &http.Client{
+		Transport: transport,
+	}, nil
+}
+
+func Request(URL string, headers map[string]string, client *http.Client) (*http.Response, error) {
+	var res *http.Response
+
+	req, err := http.NewRequest(http.MethodGet, URL, nil)
+	if err != nil {
+		return res, err
+	}
+
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	res, err = client.Do(req)
+	if err != nil {
+		return res, err
+	}
+
+	return res, nil
 }
 
 func coloredStatus(code int, au aurora.Aurora) aurora.Value {
