@@ -55,10 +55,9 @@ func init() {
 
 		h += "\nOPTIONS:\n"
 		h += "  -c         concurrency level (default: 20)\n"
-		h += "  -delay     delay between requests (ms) (default: 100)\n"
+		h += "  -delay     delay between requests (default: 100ms)\n"
 		h += "  -iL        urls with 403 to bypass (use `iL -` to read from stdin)\n"
-		h += "  -nC        no color mode\n"
-		h += "\n"
+		h += "  -nC        no color mode\n\n"
 
 		fmt.Fprintf(os.Stderr, h)
 	}
@@ -108,12 +107,10 @@ func main() {
 
 	wg := &sync.WaitGroup{}
 
-	delay := time.Duration(o.delay) * time.Millisecond
-
 	for i := 0; i < o.concurrency; i++ {
 		wg.Add(1)
 
-		time.Sleep(delay)
+		time.Sleep(time.Duration(o.delay) * time.Millisecond)
 
 		go func() {
 			defer wg.Done()
